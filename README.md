@@ -43,7 +43,7 @@ saved in the browser is used (frequency and mode default to `144.390` and `APRS`
 ## Quick start (development)
 
 Requirements: **git** and **Node.js ^20.19 or >= 22.12 with npm** (an `.nvmrc` is provided;
-see [Install everything the app needs](#1-install-everything-the-app-needs) if you need to install them).
+see [Check and install the requirements](#1-check-and-install-the-requirements) if you need to install them).
 
 ```bash
 git clone https://github.com/PP5PK/QSL_card_Creator.git
@@ -67,11 +67,73 @@ Browser ──HTTPS──▶ Apache (443) ──proxy──▶ srvx on 127.0.0.1
 Example configuration files are in [`templates/`](templates/). Replace
 `qsl.domain.net` with your own domain everywhere.
 
-### 1. Install everything the app needs
+### 1. Check and install the requirements
 
-Install all the requirements **before** touching the app, so nothing surprises
-you halfway through. Minimal server images (a fresh Debian, for example) usually
-ship **without** Node.js, npm and git.
+Do this **before** anything else, so nothing surprises you halfway through. Minimal
+server images (a fresh Debian, for example) usually ship **without** Node.js, npm and
+git. You also need a **domain name already pointing to the server** and ports **80
+and 443** open to the internet (required by Let's Encrypt).
+
+#### Automatic check (recommended)
+
+The [`scripts/check-requirements.sh`](scripts/check-requirements.sh) script checks
+every requirement, prints the installed versions, warns about incompatible
+versions and offers to install what is missing. **It always asks for confirmation
+before changing anything.**
+
+You do not need the project for this. Download the script on its own and run it
+(install `curl` first if it is missing: `sudo apt update && sudo apt install -y curl`):
+
+```bash
+curl -fsSLo check-requirements.sh \
+  https://raw.githubusercontent.com/PP5PK/QSL_card_Creator/main/scripts/check-requirements.sh
+less check-requirements.sh        # optional: read it before running
+bash check-requirements.sh
+```
+
+If you already cloned the repository, run `./scripts/check-requirements.sh` instead.
+
+Example of the report:
+
+```
+Checking requirements
+  git                          [ OK ]    2.43.0
+  curl                         [ OK ]    8.5.0
+  ca-certificates              [ OK ]    20240203
+  Node.js                      [WARN]    18.19.0 (needs ^20.19 or >=22.12)
+  npm                          [ OK ]    9.2.0
+  Apache (apache2)             [MISS]    not installed
+  ...
+
+!! Incompatible versions found
+  ! Node.js 18.19.0 is incompatible: this project needs ^20.19 or >=22.12.
+```
+
+What it checks and does:
+
+| Requirement | Check | If missing or too old |
+| ----------- | ----- | --------------------- |
+| `git`, `curl`, `ca-certificates`, `apache2` (>= 2.4), `certbot`, `python3-certbot-apache` | installed + version | installed with `apt` |
+| Node.js `^20.19` or `>= 22.12` and npm | installed + version | installed from [NodeSource](https://github.com/nodesource/distributions) (Node.js 22 LTS, npm included) |
+| Apache modules `proxy`, `proxy_http`, `rewrite`, `ssl` | enabled | enabled with `a2enmod`, then Apache is restarted |
+
+Options:
+
+| Option | Effect |
+| ------ | ------ |
+| `-c`, `--check-only` | only report, never install anything |
+| `-n`, `--dry-run` | show the commands that would run, without running them |
+| `-y`, `--yes` | do not ask for confirmation (non-interactive) |
+| `-h`, `--help` | show the help |
+
+The script exits with status `0` when everything is satisfied and `1` otherwise.
+Automatic installation works on Debian/Ubuntu (apt); on other systems it only
+reports. Run it again after fixing anything, until it ends with *All requirements
+are satisfied*.
+
+#### Manual installation
+
+If you prefer to do it by hand, these are the components and commands:
 
 | Component                         | Why it is needed                                         |
 | --------------------------------- | -------------------------------------------------------- |
@@ -80,9 +142,6 @@ ship **without** Node.js, npm and git.
 | **Node.js `^20.19` or `>= 22.12`** with **npm** | install dependencies, build and run the app |
 | `apache2`                         | public web server (HTTPS and reverse proxy)             |
 | `certbot`, `python3-certbot-apache` | free Let's Encrypt certificate                         |
-
-You also need a **domain name already pointing to the server** and ports
-**80 and 443** open to the internet (required by Let's Encrypt).
 
 **System packages:**
 
@@ -253,6 +312,7 @@ project:
 .
 ├── docs/                 Screenshot used by this README
 ├── public/               Static files (card background, favicon)
+├── scripts/              check-requirements.sh (prerequisites check/installer)
 ├── src/
 │   ├── components/       QSL card component
 │   ├── lib/              QSO parsing/formatting helpers
@@ -280,7 +340,7 @@ Tailwind CSS. Production runs through [srvx](https://github.com/h3js/srvx).
 - **`apache2ctl configtest` complains about `Proxy`/`Rewrite`**: enable the
   modules with `sudo a2enmod proxy proxy_http rewrite ssl`.
 - **`npm: command not found`**: npm is not installed. Install Node.js with npm as
-  described in [step 1](#1-install-everything-the-app-needs).
+  described in [step 1](#1-check-and-install-the-requirements).
 - **Build fails with a Node.js version error**: this project needs Node.js
   `^20.19` or `>= 22.12`.
 
