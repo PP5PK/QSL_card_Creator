@@ -40,58 +40,50 @@ https://qsl.example.net/?call=PY2AAA&date=2026-09-30&time=1225&freq=145.570&mode
 Values are sanitized on load. When no parameter is present, the last contact
 saved in the browser is used (frequency and mode default to `144.390` and `APRS`).
 
-## Quick start (development)
+## Installation
 
-Requirements: **git** and **Node.js ^20.19 or >= 22.12 with npm** (an `.nvmrc` is provided;
-see [Check and install the requirements](#1-check-and-install-the-requirements) if you need to install them).
+This guide installs the app on a **Debian or Ubuntu server** (a VPS, for example)
+with Apache as the public web server. Follow the steps **in order**.
 
-```bash
-git clone https://github.com/PP5PK/QSL_card_Creator.git
-cd QSL_card_Creator
-npm ci
-npm run dev
-```
+Before you start, you need:
 
-The dev server listens on `http://localhost:8080`.
+- SSH access to the server with **root** (or sudo) privileges;
+- a domain or subdomain **already pointing to the server's IP address**;
+- ports **80 and 443** open to the internet (required by Let's Encrypt).
 
-## Production deployment
+Conventions used below:
 
-This guide assumes a Debian/Ubuntu server with Apache as the public web server.
-Apache terminates HTTPS and proxies requests to the app, which runs as a
-systemd service on `127.0.0.1:3000`.
+- `qsl.example.net` is an example: **replace it with your own domain** everywhere.
+- All commands run in a **root shell**. If you log in as a normal user, run `sudo -i` first.
+- The project is installed in `/var/www/html/cards`.
+
+A condensed checklist of these steps is available in
+[`templates/install.txt`](templates/install.txt).
+
+How the pieces fit together:
 
 ```
 Browser ──HTTPS──▶ Apache (443) ──proxy──▶ srvx on 127.0.0.1:3000 ──▶ built app
 ```
 
-Example configuration files (and the requirements check script) are in [`templates/`](templates/). Replace
-`qsl.domain.net` with your own domain everywhere.
+### Step 1: Check the requirements
 
-### 1. Check and install the requirements
+Run the requirements script **before anything else**. It makes sure nothing is
+missing and stops you early if something is incompatible, so you do not find out
+halfway through the installation.
 
-Do this **before** anything else, so nothing surprises you halfway through. Minimal
-server images (a fresh Debian, for example) usually ship **without** Node.js, npm and
-git. You also need a **domain name already pointing to the server** and ports **80
-and 443** open to the internet (required by Let's Encrypt).
-
-#### Automatic check (recommended)
-
-The [`templates/check-requirements.sh`](templates/check-requirements.sh) script checks
-every requirement, prints the installed versions, warns about incompatible
-versions and offers to install what is missing. **It always asks for confirmation
-before changing anything.**
-
-You do not need the project for this. Download the script on its own and run it
-(install `curl` first if it is missing: `sudo apt update && sudo apt install -y curl`):
+You do not need the project for this step. Download the script on its own and run it
+(if `curl` is missing, install it first with `apt update && apt install -y curl`):
 
 ```bash
 curl -fsSLo check-requirements.sh \
   https://raw.githubusercontent.com/PP5PK/QSL_card_Creator/main/templates/check-requirements.sh
-less check-requirements.sh        # optional: read it before running
 bash check-requirements.sh
 ```
 
-If you already cloned the repository, run `./templates/check-requirements.sh` instead.
+**Do not continue until the script ends with `All requirements are satisfied.`**
+It always asks for confirmation before changing anything, and you can run it as many
+times as you want.
 
 Example of the report:
 
@@ -109,92 +101,80 @@ Checking requirements
   ! Node.js 18.19.0 is incompatible: this project needs ^20.19 or >=22.12.
 ```
 
-What it checks and does:
+What the script checks and does:
 
 | Requirement | Check | If missing or too old |
 | ----------- | ----- | --------------------- |
 | `git`, `curl`, `ca-certificates`, `apache2` (>= 2.4), `certbot`, `python3-certbot-apache` | installed + version | installed with `apt` |
 | Node.js `^20.19` or `>= 22.12` and npm | installed + version | installed from [NodeSource](https://github.com/nodesource/distributions) (Node.js 22 LTS, npm included) |
 | Apache modules `proxy`, `proxy_http`, `rewrite`, `ssl` | enabled | enabled with `a2enmod`, then Apache is restarted |
+| Unused packages | listed by `apt` | removed with `apt autoremove` (the list is shown first) |
 
 Options:
 
 | Option | Effect |
 | ------ | ------ |
-| `-c`, `--check-only` | only report, never install anything |
+| `-c`, `--check-only` | only report, never install or remove anything |
 | `-n`, `--dry-run` | show the commands that would run, without running them |
 | `-y`, `--yes` | do not ask for confirmation (non-interactive) |
 | `-h`, `--help` | show the help |
 
-The script exits with status `0` when everything is satisfied and `1` otherwise.
-Automatic installation works on Debian/Ubuntu (apt); on other systems it only
-reports. Run it again after fixing anything, until it ends with *All requirements
-are satisfied*.
+The script exits with status `0` when every requirement is satisfied and `1`
+otherwise. Automatic installation works on Debian/Ubuntu (apt); on other systems it
+only reports.
 
-#### Manual installation
+<details>
+<summary>Prefer to do it by hand? Manual installation</summary>
 
-If you prefer to do it by hand, these are the components and commands:
-
-| Component                         | Why it is needed                                         |
-| --------------------------------- | -------------------------------------------------------- |
-| `git`                             | download the project and, later, updates                 |
-| `curl`, `ca-certificates`         | add the Node.js repository and run the checks below      |
+| Component | Why it is needed |
+| --------- | ---------------- |
+| `git` | download the project and, later, updates |
+| `curl`, `ca-certificates` | add the Node.js repository and run the checks |
 | **Node.js `^20.19` or `>= 22.12`** with **npm** | install dependencies, build and run the app |
-| `apache2`                         | public web server (HTTPS and reverse proxy)             |
-| `certbot`, `python3-certbot-apache` | free Let's Encrypt certificate                         |
-
-**System packages:**
+| `apache2` | public web server (HTTPS and reverse proxy) |
+| `certbot`, `python3-certbot-apache` | free Let's Encrypt certificate |
 
 ```bash
-sudo apt update
-sudo apt install -y git curl ca-certificates apache2 certbot python3-certbot-apache
-```
+apt update
+apt install -y git curl ca-certificates apache2 certbot python3-certbot-apache
 
-**Node.js and npm.** On Debian/Ubuntu the `nodejs` and `npm` packages from the
-distribution repositories are often older than the version this project needs,
-and `npm` may even be a separate package. The simplest way to get a supported
-Node.js (npm is included) is the NodeSource repository:
+# Node.js 22 LTS with npm (the distribution packages are often too old)
+curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+apt install -y nodejs
 
-```bash
-curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
-sudo apt install -y nodejs
-```
+# Apache modules
+a2enmod proxy proxy_http rewrite ssl
+systemctl restart apache2
 
-Alternatively, use [nvm](https://github.com/nvm-sh/nvm).
-
-**Apache modules:**
-
-```bash
-sudo a2enmod proxy proxy_http rewrite ssl
-sudo systemctl restart apache2
-```
-
-**Check that everything is in place** before continuing:
-
-```bash
+# Check everything
 git --version
-node -v                 # must be v20.19+ or v22.12+
-npm -v                  # must print a version
+node -v        # must be v20.19+ or v22.12+
+npm -v         # must print a version
 apache2 -v
 certbot --version
 apache2ctl -M | grep -E "proxy_module|proxy_http_module|rewrite_module|ssl_module"
 ```
 
-If any command fails, fix it now. The next steps assume all of them pass.
+</details>
 
-### 2. Get the code and build it
+### Step 2: Download the project
 
 ```bash
-cd /var/www/html
-sudo git clone https://github.com/PP5PK/QSL_card_Creator.git cards
-cd cards
+git clone https://github.com/PP5PK/QSL_card_Creator.git /var/www/html/cards
+cd /var/www/html/cards
+```
+
+### Step 3: Install the dependencies and build
+
+```bash
 npm ci
 npm run build
 ```
 
 The build is written to `.vercel/output/` (it is not committed to git).
 
-Optional smoke test (stop it with Ctrl+C):
+Optional smoke test. Start the app, check it from a second terminal and stop it
+with Ctrl+C:
 
 ```bash
 npm start
@@ -202,57 +182,111 @@ npm start
 curl -sI http://127.0.0.1:3000/card/bg.jpg | head -1    # HTTP/1.1 200
 ```
 
-### 3. Configure Apache
+### Step 4: Create the Apache site (HTTP)
 
-Create the HTTP virtual host from the template and enable it:
-
-```bash
-sudo cp templates/qsl.domain.net.conf /etc/apache2/sites-available/qsl.example.net.conf
-sudo nano /etc/apache2/sites-available/qsl.example.net.conf     # set your domain
-sudo a2ensite qsl.example.net
-sudo systemctl reload apache2
-```
-
-Request the certificate (your DNS must already point to the server):
+Copy the template **using your domain as the file name** and edit it:
 
 ```bash
-sudo certbot --apache -d qsl.example.net
+cp /var/www/html/cards/templates/qsl.domain.net.conf /etc/apache2/sites-available/qsl.example.net.conf
+nano /etc/apache2/sites-available/qsl.example.net.conf
 ```
 
-Certbot creates `qsl.example.net-le-ssl.conf`. Edit it so that the `443` virtual
-host proxies to the app instead of serving files, following
-[`templates/qsl.domain.net-le-ssl.conf`](templates/qsl.domain.net-le-ssl.conf):
+Both the **file name** and its **content** must match your domain. Inside the file,
+replace `qsl.domain.net` with your domain in the `ServerName` and `RewriteCond`
+lines:
 
 ```apache
-ProxyPreserveHost On
-ProxyPass / http://127.0.0.1:3000/
-ProxyPassReverse / http://127.0.0.1:3000/
+<VirtualHost *:80>
+     ServerName qsl.example.net
+     DocumentRoot /var/www/html/cards
+RewriteEngine on
+RewriteCond %{SERVER_NAME} =qsl.example.net
+RewriteRule ^ https://%{SERVER_NAME}%{REQUEST_URI} [END,NE,R=permanent]
+</VirtualHost>
 ```
 
-Then check the syntax (it must print `Syntax OK`) and reload:
+Enable the site, check the syntax and reload Apache. The check must end with
+`Syntax OK`; a warning about the server's *fully qualified domain name* (`AH00558`)
+before it is harmless:
 
 ```bash
-sudo apache2ctl configtest
-sudo systemctl reload apache2
+a2ensite qsl.example.net
+apache2ctl configtest
+systemctl reload apache2
 ```
 
-### 4. Create the systemd service
+### Step 5: Get the HTTPS certificate
 
 ```bash
-sudo cp templates/qsl.service /etc/systemd/system/qsl.service
-sudo nano /etc/systemd/system/qsl.service    # adjust the paths if you did not use /var/www/html/cards
-sudo systemctl daemon-reload
-sudo systemctl enable --now qsl.service
+certbot --apache -d qsl.example.net
 ```
 
-Check that everything is running:
+Answer the questions (e-mail, terms of service). Certbot creates and enables the
+HTTPS site `/etc/apache2/sites-available/qsl.example.net-le-ssl.conf`.
+
+### Step 6: Point the HTTPS site to the app
+
+Edit the file certbot just created:
 
 ```bash
+nano /etc/apache2/sites-available/qsl.example.net-le-ssl.conf
+```
+
+Certbot copies the `DocumentRoot` line from the HTTP site. **Replace that line** with
+the three proxy lines, as in
+[`templates/qsl.domain.net-le-ssl.conf`](templates/qsl.domain.net-le-ssl.conf).
+
+Before:
+
+```apache
+     ServerName qsl.example.net
+     DocumentRoot /var/www/html/cards
+```
+
+After:
+
+```apache
+     ServerName qsl.example.net
+
+     ProxyPreserveHost On
+     ProxyPass / http://127.0.0.1:3000/
+     ProxyPassReverse / http://127.0.0.1:3000/
+```
+
+Removing the `DocumentRoot` is recommended: with `ProxyPass /` every request goes to
+the app, so Apache never serves files from that folder. If you keep the line, it
+does no harm while the proxy works, but should the proxy lines ever be removed or
+mistyped, Apache would start serving the project folder (source code,
+`package.json`, `.git`) to the internet.
+
+Check the syntax (`Syntax OK`) and reload:
+
+```bash
+apache2ctl configtest
+systemctl reload apache2
+```
+
+### Step 7: Create the systemd service
+
+```bash
+cp /var/www/html/cards/templates/qsl.service /etc/systemd/system/qsl.service
+systemctl daemon-reload
+systemctl enable --now qsl.service
 systemctl status qsl.service --no-pager
-curl -sI http://127.0.0.1:3000/card/bg.jpg | head -1    # HTTP/1.1 200
 ```
 
-Then open `https://qsl.example.net/` in your browser.
+The template assumes the project is in `/var/www/html/cards`. If you installed it
+elsewhere, edit the paths in `/etc/systemd/system/qsl.service` before the
+`daemon-reload`.
+
+### Step 8: Test
+
+```bash
+curl -sI http://127.0.0.1:3000/card/bg.jpg | head -1    # HTTP/1.1 200
+curl -sI https://qsl.example.net/ | head -1             # 200 (HTTP/1.1 or HTTP/2)
+```
+
+Then open `https://qsl.example.net/` in your browser. Done.
 
 ### Updating
 
@@ -265,7 +299,7 @@ cd /var/www/html/cards
 git pull
 npm ci
 npm run build
-sudo systemctl restart qsl.service
+systemctl restart qsl.service
 ```
 
 ## Customizing
@@ -317,7 +351,7 @@ project:
 │   ├── lib/              QSO parsing/formatting helpers
 │   ├── routes/           Page (TanStack Router)
 │   └── styles.css        Card and page styles
-├── templates/            Apache/systemd examples and check-requirements.sh
+├── templates/            Apache/systemd examples, install.txt, check-requirements.sh
 ├── package.json
 └── vite.config.ts
 ```
@@ -328,7 +362,7 @@ Tailwind CSS. Production runs through [srvx](https://github.com/h3js/srvx).
 ## Troubleshooting
 
 - **My changes do not show up**: rebuild and restart the service
-  (`npm run build && sudo systemctl restart qsl.service`). Use a private window
+  (`npm run build && systemctl restart qsl.service`). Use a private window
   to rule out browser cache.
 - **502 / Bad Gateway from Apache**: the service is not running or not on port
   3000. Check `systemctl status qsl.service` and
@@ -337,9 +371,9 @@ Tailwind CSS. Production runs through [srvx](https://github.com/h3js/srvx).
   `.vercel/output/` exist (run `npm ci` and `npm run build`) and that the paths
   in `qsl.service` match where you installed the project.
 - **`apache2ctl configtest` complains about `Proxy`/`Rewrite`**: enable the
-  modules with `sudo a2enmod proxy proxy_http rewrite ssl`.
+  modules with `a2enmod proxy proxy_http rewrite ssl` (or run `check-requirements.sh` again).
 - **`npm: command not found`**: npm is not installed. Install Node.js with npm as
-  described in [step 1](#1-check-and-install-the-requirements).
+  described in [Step 1](#step-1-check-the-requirements).
 - **Build fails with a Node.js version error**: this project needs Node.js
   `^20.19` or `>= 22.12`.
 

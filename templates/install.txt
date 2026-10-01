@@ -1,0 +1,143 @@
+================================================================================
+ QSL CARD CREATOR - INSTALLATION QUICK REFERENCE
+================================================================================
+ Short checklist of the installation steps, for future consultation.
+ The README.md is the complete guide, with explanations.
+
+ Replace qsl.example.net with your own domain everywhere.
+ Run everything in a root shell (sudo -i). Follow the steps in order.
+================================================================================
+
+
+--------------------------------------------------------------------------------
+ BEFORE YOU START
+--------------------------------------------------------------------------------
+ - Debian/Ubuntu server with root (or sudo) access
+ - Domain already pointing to the server's IP address
+ - Ports 80 and 443 open to the internet
+
+
+--------------------------------------------------------------------------------
+ 1. CHECK THE REQUIREMENTS
+--------------------------------------------------------------------------------
+ Checks git, curl, ca-certificates, Node.js (^20.19 or >=22.12), npm, Apache,
+ certbot and the Apache modules; shows the versions, warns about incompatible
+ ones, installs what is missing (asking first) and offers "apt autoremove".
+ Continue only when it ends with "All requirements are satisfied."
+
+   apt update && apt install -y curl        # only if curl is missing
+   curl -fsSLo check-requirements.sh \
+     https://raw.githubusercontent.com/PP5PK/QSL_card_Creator/main/templates/check-requirements.sh
+   bash check-requirements.sh
+
+
+--------------------------------------------------------------------------------
+ 2. DOWNLOAD THE PROJECT
+--------------------------------------------------------------------------------
+   git clone https://github.com/PP5PK/QSL_card_Creator.git /var/www/html/cards
+   cd /var/www/html/cards
+
+
+--------------------------------------------------------------------------------
+ 3. INSTALL THE DEPENDENCIES AND BUILD
+--------------------------------------------------------------------------------
+   npm ci
+   npm run build
+
+
+--------------------------------------------------------------------------------
+ 4. APACHE SITE (HTTP)
+--------------------------------------------------------------------------------
+ The file name AND its content must match your domain.
+
+   cp /var/www/html/cards/templates/qsl.domain.net.conf \
+      /etc/apache2/sites-available/qsl.example.net.conf
+   nano /etc/apache2/sites-available/qsl.example.net.conf
+       -> replace qsl.domain.net with your domain (ServerName and RewriteCond)
+
+   a2ensite qsl.example.net
+   apache2ctl configtest                    # must end with "Syntax OK"
+   systemctl reload apache2
+   (a warning "AH00558 ... fully qualified domain name" before it is harmless)
+
+
+--------------------------------------------------------------------------------
+ 5. HTTPS CERTIFICATE
+--------------------------------------------------------------------------------
+   certbot --apache -d qsl.example.net
+       -> creates /etc/apache2/sites-available/qsl.example.net-le-ssl.conf
+
+
+--------------------------------------------------------------------------------
+ 6. POINT THE HTTPS SITE TO THE APP
+--------------------------------------------------------------------------------
+   nano /etc/apache2/sites-available/qsl.example.net-le-ssl.conf
+
+ REPLACE the line below (copied by certbot from the HTTP site):
+
+       DocumentRoot /var/www/html/cards
+
+ WITH these three lines:
+
+       ProxyPreserveHost On
+       ProxyPass / http://127.0.0.1:3000/
+       ProxyPassReverse / http://127.0.0.1:3000/
+
+ (Removing DocumentRoot is recommended: otherwise, if the proxy lines are ever
+  removed or mistyped, Apache would serve the project folder to the internet.)
+
+   apache2ctl configtest                    # must print "Syntax OK"
+   systemctl reload apache2
+
+
+--------------------------------------------------------------------------------
+ 7. SYSTEMD SERVICE
+--------------------------------------------------------------------------------
+ The template assumes /var/www/html/cards. Edit the paths if you used another
+ directory.
+
+   cp /var/www/html/cards/templates/qsl.service /etc/systemd/system/qsl.service
+   systemctl daemon-reload
+   systemctl enable --now qsl.service
+   systemctl status qsl.service --no-pager
+
+
+--------------------------------------------------------------------------------
+ 8. TEST
+--------------------------------------------------------------------------------
+   curl -sI http://127.0.0.1:3000/card/bg.jpg | head -1    # HTTP/1.1 200
+   curl -sI https://qsl.example.net/ | head -1             # 200
+
+ Then open https://qsl.example.net/ in the browser.
+
+
+================================================================================
+ MAINTENANCE
+================================================================================
+
+ After ANY change in the project (src/, public/) or after "git pull":
+ the service runs the BUILT files, so rebuild and restart.
+
+   cd /var/www/html/cards
+   git pull                                  # only when updating from GitHub
+   npm ci
+   npm run build
+   systemctl restart qsl.service
+
+ Logs:
+   systemctl status qsl.service --no-pager
+   journalctl -u qsl.service -n 50 --no-pager
+
+
+================================================================================
+ WHERE TO EDIT THE CARD
+================================================================================
+
+   src/components/qsl-card.tsx     callsign, name, QTH, grid/zones, website
+   src/styles.css                 colors, fonts, positions and sizes
+   public/card/bg.jpg             background image
+   src/lib/qso.ts                 downloaded file name prefix (fileName())
+   src/routes/index.tsx           page header, helper texts, mode buttons
+   src/routes/__root.tsx          page title and description
+
+ Then rebuild and restart the service (see MAINTENANCE).

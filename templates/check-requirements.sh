@@ -10,6 +10,8 @@
 #   git, curl, ca-certificates, Node.js (^20.19 or >=22.12), npm, Apache (>=2.4),
 #   certbot, python3-certbot-apache and the Apache modules
 #   proxy, proxy_http, rewrite and ssl.
+# It also reports packages that are no longer needed and offers to remove them
+# (apt autoremove).
 #
 # Usage:
 #   ./check-requirements.sh [options]
@@ -40,7 +42,7 @@ for arg in "$@"; do
     -y | --yes) ASSUME_YES=1 ;;
     -n | --dry-run) DRY_RUN=1 ;;
     -h | --help)
-      sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//'
+      sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//'
       exit 0
       ;;
     *)
@@ -66,6 +68,7 @@ title() { printf '\n%s%s%s\n' "$C_BOLD" "$1" "$C_RESET"; }
 row() { printf '  %-28s %-9s %s\n' "$1" "$2" "$3"; }
 row_ok() { row "$1" "${C_GREEN}[ OK ]${C_RESET}" "$2"; }
 row_missing() { row "$1" "${C_RED}[MISS]${C_RESET}" "$2"; }
+row_info() { row "$1" "${C_YELLOW}[INFO]${C_RESET}" "$2"; }
 row_old() { row "$1" "${C_YELLOW}[WARN]${C_RESET}" "$2"; }
 
 # --------------------------------------------------------------- helpers ----
@@ -133,6 +136,7 @@ as_root() {
 MISSING_PKGS=()    # apt packages to install
 NODE_PROBLEM=""    # "", missing, old or npm
 MODULES_MISSING=() # Apache modules to enable
+UNUSED_PKGS=()     # packages apt autoremove would remove (informational)
 WARNINGS=()        # incompatibility notifications
 PROBLEMS=0
 
@@ -221,6 +225,18 @@ check_modules() {
   done
 }
 
+# Packages that apt no longer needs (informational, never counted as a problem)
+check_unused() {
+  UNUSED_PKGS=()
+  [ "$HAS_APT" -eq 1 ] || return
+  mapfile -t UNUSED_PKGS < <(apt-get -s autoremove 2> /dev/null | awk '/^Remv /{print $2}')
+  if [ "${#UNUSED_PKGS[@]}" -eq 0 ]; then
+    row_ok "Unused packages" "none"
+  else
+    row_info "Unused packages" "${#UNUSED_PKGS[@]} can be removed (apt autoremove)"
+  fi
+}
+
 run_checks() {
   MISSING_PKGS=()
   NODE_PROBLEM=""
@@ -236,6 +252,7 @@ run_checks() {
   check_tool "certbot" certbot certbot
   check_pkg "python3-certbot-apache" python3-certbot-apache
   check_modules
+  check_unused
 }
 
 show_warnings() {
@@ -259,12 +276,17 @@ fi
 run_checks
 show_warnings
 
-if [ "$PROBLEMS" -eq 0 ]; then
+if [ "$PROBLEMS" -eq 0 ] && [ "${#UNUSED_PKGS[@]}" -eq 0 ]; then
   title "${C_GREEN}All requirements are satisfied.${C_RESET}"
   exit 0
 fi
 
 if [ "$CHECK_ONLY" -eq 1 ]; then
+  if [ "$PROBLEMS" -eq 0 ]; then
+    title "${C_GREEN}All requirements are satisfied.${C_RESET}"
+    echo "Unused packages were found. Run without --check-only to remove them."
+    exit 0
+  fi
   title "${C_RED}$PROBLEMS requirement(s) missing or incompatible.${C_RESET}"
   echo "Run the script again without --check-only to install them."
   exit 1
@@ -341,6 +363,23 @@ if have apache2ctl; then
     else
       echo "  Skipped."
     fi
+  fi
+fi
+
+# --- 4. Unused packages ----------------------------------------------------
+
+# Recomputed here because the steps above can leave packages orphaned
+# (for example when NodeSource replaces the distribution's Node.js).
+if [ "$DRY_RUN" -eq 0 ]; then check_unused > /dev/null; fi
+if [ "${#UNUSED_PKGS[@]}" -gt 0 ]; then
+  title "Unused packages"
+  echo "  apt reports ${#UNUSED_PKGS[@]} package(s) that no installed package depends on:"
+  echo "${UNUSED_PKGS[*]}" | fold -s -w 72 | sed 's/^/    /'
+  echo "  Review the list: 'apt autoremove' removes every package shown above."
+  if confirm "Remove these packages with apt autoremove?"; then
+    as_root apt-get autoremove -y
+  else
+    echo "  Skipped."
   fi
 fi
 
