@@ -1,0 +1,10 @@
+node_modules/
+.output/
+.vercel/
+dist/
+.env
+.env.*
+*.log
+*.db
+*.sqlite
+.DS_Store

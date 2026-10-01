@@ -1,0 +1,12 @@
+[Unit]
+Description=QSL PP5PK
+After=network.target
+
+[Service]
+WorkingDirectory=/var/www/html/cards/.vercel/output
+ExecStart=/var/www/html/cards/node_modules/.bin/srvx serve --prod --host 127.0.0.1 --port 3000 --static ../../static ./functions/__server.func/index.mjs
+Restart=on-failure
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target
