@@ -1,15 +1,27 @@
 {
-  "name": "qsl-cards",
+  "name": "qsl-card-creator",
   "version": "1.0.0",
+  "description": "Web app that creates printable QSL cards for amateur radio contacts, with APRS auto-fill through URL parameters.",
+  "license": "Unlicense",
+  "author": "PP5PK",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/PP5PK/QSL_card_Creator.git"
+  },
+  "homepage": "https://github.com/PP5PK/QSL_card_Creator",
   "private": true,
-  "sideEffects": false,
   "type": "module",
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
+  "sideEffects": false,
   "overrides": {
     "nf3": "0.3.17"
   },
   "scripts": {
     "dev": "vite dev --host 0.0.0.0 --port 8080",
     "build": "vite build",
+    "start": "cd .vercel/output && srvx serve --prod --host 127.0.0.1 --port 3000 --static ../../static ./functions/__server.func/index.mjs",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
