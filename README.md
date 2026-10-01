@@ -64,7 +64,7 @@ systemd service on `127.0.0.1:3000`.
 Browser ──HTTPS──▶ Apache (443) ──proxy──▶ srvx on 127.0.0.1:3000 ──▶ built app
 ```
 
-Example configuration files are in [`templates/`](templates/). Replace
+Example configuration files (and the requirements check script) are in [`templates/`](templates/). Replace
 `qsl.domain.net` with your own domain everywhere.
 
 ### 1. Check and install the requirements
@@ -76,7 +76,7 @@ and 443** open to the internet (required by Let's Encrypt).
 
 #### Automatic check (recommended)
 
-The [`scripts/check-requirements.sh`](scripts/check-requirements.sh) script checks
+The [`templates/check-requirements.sh`](templates/check-requirements.sh) script checks
 every requirement, prints the installed versions, warns about incompatible
 versions and offers to install what is missing. **It always asks for confirmation
 before changing anything.**
@@ -86,12 +86,12 @@ You do not need the project for this. Download the script on its own and run it
 
 ```bash
 curl -fsSLo check-requirements.sh \
-  https://raw.githubusercontent.com/PP5PK/QSL_card_Creator/main/scripts/check-requirements.sh
+  https://raw.githubusercontent.com/PP5PK/QSL_card_Creator/main/templates/check-requirements.sh
 less check-requirements.sh        # optional: read it before running
 bash check-requirements.sh
 ```
 
-If you already cloned the repository, run `./scripts/check-requirements.sh` instead.
+If you already cloned the repository, run `./templates/check-requirements.sh` instead.
 
 Example of the report:
 
@@ -312,13 +312,12 @@ project:
 .
 ├── docs/                 Screenshot used by this README
 ├── public/               Static files (card background, favicon)
-├── scripts/              check-requirements.sh (prerequisites check/installer)
 ├── src/
 │   ├── components/       QSL card component
 │   ├── lib/              QSO parsing/formatting helpers
 │   ├── routes/           Page (TanStack Router)
 │   └── styles.css        Card and page styles
-├── templates/            Example Apache and systemd configuration
+├── templates/            Apache/systemd examples and check-requirements.sh
 ├── package.json
 └── vite.config.ts
 ```
