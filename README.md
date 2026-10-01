@@ -184,7 +184,27 @@ curl -sI http://127.0.0.1:3000/card/bg.jpg | head -1    # HTTP/1.1 200
 
 ### Step 4: Create the Apache site (HTTP)
 
-Copy the template **using your domain as the file name** and edit it:
+**4.1 Silence the `AH00558` warning (recommended).** On a fresh Apache,
+`apache2ctl configtest` often prints this before `Syntax OK`:
+
+```
+AH00558: apache2: Could not reliably determine the server's fully qualified domain name, using 127.0.1.1. Set the 'ServerName' directive globally to suppress this message
+```
+
+It is harmless, but it looks like an error. Apache has no *global* `ServerName` by
+default (the `ServerName` inside a site only applies to that site), so it guesses one
+from the hostname. Set it once, using your server's main domain or hostname (any
+valid name works):
+
+```bash
+echo "ServerName example.net" > /etc/apache2/conf-available/servername.conf
+a2enconf servername
+apache2ctl configtest
+systemctl reload apache2
+```
+
+**4.2 Create the site.** Copy the template **using your domain as the file name**
+and edit it:
 
 ```bash
 cp /var/www/html/cards/templates/qsl.domain.net.conf /etc/apache2/sites-available/qsl.example.net.conf
@@ -192,22 +212,20 @@ nano /etc/apache2/sites-available/qsl.example.net.conf
 ```
 
 Both the **file name** and its **content** must match your domain. Inside the file,
-replace `qsl.domain.net` with your domain in the `ServerName` and `RewriteCond`
-lines:
+replace `qsl.domain.net` with your domain in the `ServerName` line:
 
 ```apache
 <VirtualHost *:80>
      ServerName qsl.example.net
      DocumentRoot /var/www/html/cards
-RewriteEngine on
-RewriteCond %{SERVER_NAME} =qsl.example.net
-RewriteRule ^ https://%{SERVER_NAME}%{REQUEST_URI} [END,NE,R=permanent]
 </VirtualHost>
 ```
 
-Enable the site, check the syntax and reload Apache. The check must end with
-`Syntax OK`; a warning about the server's *fully qualified domain name* (`AH00558`)
-before it is harmless:
+This site is intentionally minimal: it only exists so certbot can issue the
+certificate. There is no HTTPS redirect yet because the certificate does not exist;
+certbot adds it in the next step.
+
+Enable the site, check the syntax (it must end with `Syntax OK`) and reload Apache:
 
 ```bash
 a2ensite qsl.example.net
@@ -221,8 +239,10 @@ systemctl reload apache2
 certbot --apache -d qsl.example.net
 ```
 
-Answer the questions (e-mail, terms of service). Certbot creates and enables the
-HTTPS site `/etc/apache2/sites-available/qsl.example.net-le-ssl.conf`.
+Answer the questions (e-mail, terms of service). When certbot asks whether to
+redirect HTTP traffic to HTTPS, choose **Redirect** (option 2): it adds the redirect
+to the HTTP site for you. Certbot also creates and enables the HTTPS site
+`/etc/apache2/sites-available/qsl.example.net-le-ssl.conf`.
 
 ### Step 6: Point the HTTPS site to the app
 

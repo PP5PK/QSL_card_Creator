@@ -48,23 +48,34 @@
 --------------------------------------------------------------------------------
  4. APACHE SITE (HTTP)
 --------------------------------------------------------------------------------
- The file name AND its content must match your domain.
+ 4.1 Silence the harmless "AH00558 ... fully qualified domain name" warning
+     (Apache has no global ServerName by default; use your server's main domain
+     or hostname, any valid name works):
+
+   echo "ServerName example.net" > /etc/apache2/conf-available/servername.conf
+   a2enconf servername
+   apache2ctl configtest
+   systemctl reload apache2
+
+ 4.2 Create the site. The file name AND its content must match your domain.
+     This site only exists so certbot can issue the certificate; certbot adds
+     the HTTPS redirect in step 5.
 
    cp /var/www/html/cards/templates/qsl.domain.net.conf \
       /etc/apache2/sites-available/qsl.example.net.conf
    nano /etc/apache2/sites-available/qsl.example.net.conf
-       -> replace qsl.domain.net with your domain (ServerName and RewriteCond)
+       -> replace qsl.domain.net with your domain (ServerName)
 
    a2ensite qsl.example.net
    apache2ctl configtest                    # must end with "Syntax OK"
    systemctl reload apache2
-   (a warning "AH00558 ... fully qualified domain name" before it is harmless)
 
 
 --------------------------------------------------------------------------------
  5. HTTPS CERTIFICATE
 --------------------------------------------------------------------------------
    certbot --apache -d qsl.example.net
+       -> when asked about redirecting HTTP to HTTPS, choose "Redirect" (2)
        -> creates /etc/apache2/sites-available/qsl.example.net-le-ssl.conf
 
 
