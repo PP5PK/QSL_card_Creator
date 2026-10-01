@@ -1,3 +1,6 @@
+# systemd unit for the QSL Card Creator.
+# Adjust the paths if the project is not installed in /var/www/html/cards.
+# Install to /etc/systemd/system/qsl.service. See README.md > Production deployment.
 [Unit]
 Description=QSL PP5PK
 After=network.target
