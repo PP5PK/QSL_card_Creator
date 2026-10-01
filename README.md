@@ -42,7 +42,8 @@ saved in the browser is used (frequency and mode default to `144.390` and `APRS`
 
 ## Quick start (development)
 
-Requirements: **Node.js ^20.19 or >= 22.12** (an `.nvmrc` is provided) and npm.
+Requirements: **git** and **Node.js ^20.19 or >= 22.12 with npm** (an `.nvmrc` is provided;
+see [Install everything the app needs](#1-install-everything-the-app-needs) if you need to install them).
 
 ```bash
 git clone https://github.com/PP5PK/QSL_card_Creator.git
@@ -66,16 +67,61 @@ Browser ──HTTPS──▶ Apache (443) ──proxy──▶ srvx on 127.0.0.1
 Example configuration files are in [`templates/`](templates/). Replace
 `qsl.domain.net` with your own domain everywhere.
 
-### 1. Install the requirements
+### 1. Install everything the app needs
+
+Install all the requirements **before** touching the app, so nothing surprises
+you halfway through. Minimal server images (a fresh Debian, for example) usually
+ship **without** Node.js, npm and git.
+
+| Component                         | Why it is needed                                         |
+| --------------------------------- | -------------------------------------------------------- |
+| `git`                             | download the project and, later, updates                 |
+| `curl`, `ca-certificates`         | add the Node.js repository and run the checks below      |
+| **Node.js `^20.19` or `>= 22.12`** with **npm** | install dependencies, build and run the app |
+| `apache2`                         | public web server (HTTPS and reverse proxy)             |
+| `certbot`, `python3-certbot-apache` | free Let's Encrypt certificate                         |
+
+You also need a **domain name already pointing to the server** and ports
+**80 and 443** open to the internet (required by Let's Encrypt).
+
+**System packages:**
 
 ```bash
-sudo apt install apache2 git certbot python3-certbot-apache
-node -v    # must be ^20.19 or >= 22.12
+sudo apt update
+sudo apt install -y git curl ca-certificates apache2 certbot python3-certbot-apache
 ```
 
-If your distribution ships an older Node.js, install a current LTS from
-[NodeSource](https://github.com/nodesource/distributions) or with
-[nvm](https://github.com/nvm-sh/nvm).
+**Node.js and npm.** On Debian/Ubuntu the `nodejs` and `npm` packages from the
+distribution repositories are often older than the version this project needs,
+and `npm` may even be a separate package. The simplest way to get a supported
+Node.js (npm is included) is the NodeSource repository:
+
+```bash
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+sudo apt install -y nodejs
+```
+
+Alternatively, use [nvm](https://github.com/nvm-sh/nvm).
+
+**Apache modules:**
+
+```bash
+sudo a2enmod proxy proxy_http rewrite ssl
+sudo systemctl restart apache2
+```
+
+**Check that everything is in place** before continuing:
+
+```bash
+git --version
+node -v                 # must be v20.19+ or v22.12+
+npm -v                  # must print a version
+apache2 -v
+certbot --version
+apache2ctl -M | grep -E "proxy_module|proxy_http_module|rewrite_module|ssl_module"
+```
+
+If any command fails, fix it now. The next steps assume all of them pass.
 
 ### 2. Get the code and build it
 
@@ -98,12 +144,6 @@ curl -sI http://127.0.0.1:3000/card/bg.jpg | head -1    # HTTP/1.1 200
 ```
 
 ### 3. Configure Apache
-
-Enable the required modules:
-
-```bash
-sudo a2enmod proxy proxy_http rewrite ssl
-```
 
 Create the HTTP virtual host from the template and enable it:
 
@@ -239,6 +279,8 @@ Tailwind CSS. Production runs through [srvx](https://github.com/h3js/srvx).
   in `qsl.service` match where you installed the project.
 - **`apache2ctl configtest` complains about `Proxy`/`Rewrite`**: enable the
   modules with `sudo a2enmod proxy proxy_http rewrite ssl`.
+- **`npm: command not found`**: npm is not installed. Install Node.js with npm as
+  described in [step 1](#1-install-everything-the-app-needs).
 - **Build fails with a Node.js version error**: this project needs Node.js
   `^20.19` or `>= 22.12`.
 
